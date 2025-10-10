@@ -66,16 +66,24 @@ class MCStatusService {
         '$_historyUrl/history/$serverIp/$port',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw Exception('连接超时：无法连接到 Minetrack 服务器');
+        },
+      );
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         return HistoryData.fromJson(json);
       } else {
-        throw Exception('Failed to load history: ${response.statusCode}');
+        throw Exception('服务器返回错误: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error fetching history: $e');
+      if (e.toString().contains('连接超时')) {
+        rethrow;
+      }
+      throw Exception('无法获取历史数据: ${e.toString()}');
     }
   }
 

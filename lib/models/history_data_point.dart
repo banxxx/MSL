@@ -176,14 +176,19 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
                     final errorMsg = snapshot.error.toString();
                     // 检查是否是未配置错误
                     if (errorMsg.contains('未配置') ||
-                        errorMsg.contains('Exception: Minetrack')) {
-                      return _buildEmptyState();
+                        errorMsg.contains('Minetrack地址未配置')) {
+                      return _buildEmptyState(isNotConfigured: true);
                     }
+
+                    if (errorMsg.contains('连接超时') || errorMsg.contains('TimeoutException')) {
+                      return _buildTimeoutState();
+                    }
+
                     return _buildErrorState(errorMsg);
                   }
 
                   if (!snapshot.hasData || snapshot.data!.data.isEmpty) {
-                    return _buildEmptyState();
+                    return _buildEmptyState(isNotConfigured: false);
                   }
 
                   return _buildChart(snapshot.data!);
@@ -192,6 +197,66 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTimeoutState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.wifi_off,
+            size: 60,
+            color: Colors.grey[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '连接超时',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              '无法连接到 Minetrack 服务器\n请检查网络或服务器配置',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: _loadHistory,
+                icon: const Icon(Icons.refresh),
+                label: const Text('重试'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.settings),
+                label: const Text('设置'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -247,17 +312,11 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
             padding: const EdgeInsets.only(right: 8),
             child: InkWell(
               onTap: () {
-                // ✅ 方案1: 直接在 setState 中调用（推荐）
+                // 直接在 setState 中调用（推荐）
                 setState(() {
                   _selectedTimeRange = range;
                   _historyFuture = _fetchHistoryData();
                 });
-
-                // ❌ 原来的写法（有时序问题）
-                // setState(() {
-                //   _selectedTimeRange = range;
-                // });
-                // Future.microtask(() => _loadHistory());
               },
               borderRadius: BorderRadius.circular(20),
               child: Container(
@@ -296,7 +355,7 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
 
   Widget _buildChart(HistoryData history) {
     if (history.data.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(isNotConfigured: false);
     }
 
     final sortedData = List<HistoryDataPoint>.from(history.data)
@@ -580,22 +639,21 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool isNotConfigured}) {
     final settings = context.read<SettingsNotifier>();
-    final isConfigured = settings.isHistoryServerConfigured;
 
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            isConfigured ? Icons.show_chart : Icons.link_off,
+            isNotConfigured ? Icons.show_chart : Icons.search_off,
             size: 60,
             color: Colors.grey[300],
           ),
           const SizedBox(height: 16),
           Text(
-            isConfigured ? '暂无历史数据' : 'Minetrack地址未配置',
+            isNotConfigured ? 'Minetrack地址未配置' : '暂无历史数据',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],
@@ -603,15 +661,15 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
           ),
           const SizedBox(height: 8),
           Text(
-            isConfigured
-                ? '时间范围: $_selectedTimeRange'
-                : '请在设置中配置 API 地址',
+            isNotConfigured
+                ? '请在设置中配置 API 地址'
+                : '时间范围: $_selectedTimeRange',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey[500],
             ),
           ),
-          if (!isConfigured) ...[
+          if (isNotConfigured) ...[
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: () {

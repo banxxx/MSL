@@ -46,3 +46,17 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+
+
+flutter_native_splash:
+  color: "#FFFFFF"              # 背景色
+  image: "assets/icons/app_icon.png"    # 启动页图片路径
+  android_12:
+    color: "#FFFFFF"
+    image: "assets/icons/app_icon.png"
+  android: true
+  ios: true
+  #  web: true
+  # 可选：设置图片填充模式
+  android_gravity: "center"      # center | fill | fit
+  ios_content_mode: "center"     # center | scaleAspectFill
