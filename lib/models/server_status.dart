@@ -100,12 +100,8 @@ class Motd {
       return '';
     }
 
-    print('原始MOTD: $sourceText');
-
     // 使用深度解码处理中文乱码
     final processed = TextProcessor.deepDecode(sourceText);
-
-    print('处理后MOTD: $processed');
 
     return processed;
   }

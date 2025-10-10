@@ -385,7 +385,7 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
                   return const SizedBox.shrink();
                 }
 
-                if (index % xInterval.toInt() != 0 && index != sortedData.length - 1) {
+                if (index % xInterval.toInt() != 0) {
                   return const SizedBox.shrink();
                 }
 

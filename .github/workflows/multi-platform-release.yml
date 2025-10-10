@@ -54,7 +54,10 @@ jobs:
         run: flutter pub get
 
       - name: Build Android APK
-        run: flutter build apk --release
+        run: flutter build apk --release \
+          --split-per-abi \
+          --obfuscate \
+          --split-debug-info=build/app/outputs/symbols
 
       - name: Rename APK
         run: |
@@ -86,7 +89,9 @@ jobs:
         working-directory: ios
 
       - name: Build iOS
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign \
+          --obfuscate \
+          --split-debug-info=build/ios/symbols
 
       - name: Create IPA
         run: |
@@ -100,209 +105,9 @@ jobs:
           name: ios-ipa
           path: build/ios/iphoneos/MSL_ios_${{ needs.extract-version.outputs.version }}.ipa
 
-  build-windows:
-    runs-on: windows-latest
-    needs: extract-version
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.29.3
-
-      - name: Enable Windows Desktop
-        run: flutter config --enable-windows-desktop
-
-      - name: Flutter Dependencies
-        run: flutter pub get
-
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Create Windows Archive
-        run: |
-          cd build/windows/x64/runner/Release
-          7z a -tzip MSL_windows_${{ needs.extract-version.outputs.version }}.zip .
-          move MSL_windows_${{ needs.extract-version.outputs.version }}.zip ../../../../../
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-zip
-          path: MSL_windows_${{ needs.extract-version.outputs.version }}.zip
-
-  build-windows-installer:
-    runs-on: windows-latest
-    needs: extract-version
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.29.3
-
-      - name: Enable Windows Desktop
-        run: flutter config --enable-windows-desktop
-
-      - name: Flutter Dependencies
-        run: flutter pub get
-
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Create NSIS Script and Build Installer
-        # 明确指定使用 powershell 作为脚本解释器
-        shell: powershell
-        # 'run:' 后面使用 '|' 符号，表示这是一个多行脚本。
-        # 注意：下面所有脚本行的缩进都必须比 'run:' 更深一级。
-        run: |
-          # 将 NSIS 的路径添加到环境变量，确保 makensis 命令能被找到
-          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          
-          # --- 为 NSIS 清理和生成一个纯数字的版本号 ---
-          $originalVersion = "${{ needs.extract-version.outputs.version }}"
-          $numericVersion = ""
-          
-          if ($originalVersion.StartsWith("dev-")) {
-              # 对于 dev 构建，我们使用 GitHub Actions 的运行编号来创建一个唯一的数字版本
-              $numericVersion = "0.0.1.${{ github.run_number }}"
-          } else {
-              # 对于 tag 构建 (例如 "v1.2.3")，我们将其转换为 "1.2.3.0"
-              $cleanVersion = $originalVersion.TrimStart("v")
-              $parts = $cleanVersion.Split('.')
-              while ($parts.Length -lt 4) {
-                  $cleanVersion += ".0"
-                  $parts = $cleanVersion.Split('.')
-              }
-              if ($parts.Length -gt 4) {
-                  $numericVersion = ($parts[0..3] -join '.')
-              } else {
-                  $numericVersion = $cleanVersion
-              }
-          }
-          
-          Write-Host "Original Version for display: $originalVersion"
-          Write-Host "Sanitized Numeric Version for NSIS: $numericVersion"
-          
-          # --- 生成 NSIS 脚本 ---
-          # 注意：VIProductVersion 和 FileVersion 现在使用了新的 $numericVersion 变量
-          $nsisScript = @"
-          !define APP_NAME "DST Wok"
-          !define VERSION "$originalVersion"
-          !define PUBLISHER "Your Company"
-          !define WEB_SITE "https://github.com/${{ github.repository }}"
-          !define APP_EXE "dst_wok.exe"
-          !define INSTALL_DIR "`$PROGRAMFILES64\`${APP_NAME}"
-          !define MUI_ICON "static\icons\installer_icon.ico"
-          
-          VIProductVersion "$numericVersion"
-          VIAddVersionKey ProductName "`${APP_NAME}"
-          VIAddVersionKey Comments "A Flutter Windows application"
-          VIAddVersionKey CompanyName "`${PUBLISHER}"
-          VIAddVersionKey FileDescription "`${APP_NAME}"
-          VIAddVersionKey FileVersion "$numericVersion"
-          VIAddVersionKey ProductVersion "$numericVersion"
-          VIAddVersionKey InternalName "`${APP_NAME}"
-          VIAddVersionKey LegalCopyright "`${PUBLISHER}"
-          VIAddVersionKey OriginalFilename "`${APP_EXE}"
-          
-          SetCompressor lzma
-          
-          Name "`${APP_NAME}"
-          Caption "`${APP_NAME}"
-          OutFile "MSL_windows_installer_`${VERSION}.exe"
-          InstallDir "`${INSTALL_DIR}"
-          InstallDirRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "InstallLocation"
-          
-          !include "MUI2.nsh"
-          
-          !define MUI_ABORTWARNING
-          
-          !insertmacro MUI_PAGE_WELCOME
-          !insertmacro MUI_PAGE_LICENSE "LICENSE"
-          !insertmacro MUI_PAGE_DIRECTORY
-          !insertmacro MUI_PAGE_INSTFILES
-          
-          !define MUI_FINISHPAGE_RUN "`$INSTDIR\`${APP_EXE}"
-          !insertmacro MUI_PAGE_FINISH
-          
-          !insertmacro MUI_UNPAGE_WELCOME
-          !insertmacro MUI_UNPAGE_CONFIRM
-          !insertmacro MUI_UNPAGE_INSTFILES
-          !insertmacro MUI_UNPAGE_FINISH
-          
-          !insertmacro MUI_LANGUAGE "English"
-          
-          Section "MainSection" SEC01
-            SetOutPath "`$INSTDIR"
-            SetOverwrite ifnewer
-            File /r "build\windows\x64\runner\Release\*"
-            CreateDirectory "`$SMPROGRAMS\`${APP_NAME}"
-            CreateShortCut "`$SMPROGRAMS\`${APP_NAME}\`${APP_NAME}.lnk" "`$INSTDIR\`${APP_EXE}"
-            CreateShortCut "`$DESKTOP\`${APP_NAME}.lnk" "`$INSTDIR\`${APP_EXE}"
-          SectionEnd
-          
-          Section -Post
-            WriteUninstaller "`$INSTDIR\uninst.exe"
-            WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayName" "`$(^Name)"
-            WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "UninstallString" "`$INSTDIR\uninst.exe"
-            WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayIcon" "`$INSTDIR\`${APP_EXE}"
-            WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayVersion" "`${VERSION}"
-            WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "URLInfoAbout" "`${WEB_SITE}"
-            WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "Publisher" "`${PUBLISHER}"
-          SectionEnd
-          
-          Function un.onUninstSuccess
-            HideWindow
-            MessageBox MB_ICONINFORMATION|MB_OK "Application was successfully removed from your computer."
-          FunctionEnd
-          
-          Function un.onInit
-            MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to completely remove `$(^Name) and all of its components?" IDYES +2
-            Abort
-          FunctionEnd
-          
-          Section Uninstall
-            Delete "`$INSTDIR\`${APP_NAME}.url"
-            Delete "`$INSTDIR\uninst.exe"
-            Delete "`$INSTDIR\*.dll"
-            Delete "`$INSTDIR\*.exe"
-            Delete "`$INSTDIR\*"
-          
-            Delete "`$SMPROGRAMS\`${APP_NAME}\Uninstall.lnk"
-            Delete "`$SMPROGRAMS\`${APP_NAME}\Website.lnk"
-            Delete "`$DESKTOP\`${APP_NAME}.lnk"
-            Delete "`$SMPROGRAMS\`${APP_NAME}\`${APP_NAME}.lnk"
-          
-            RMDir "`$SMPROGRAMS\`${APP_NAME}"
-            RMDir "`$INSTDIR"
-          
-            DeleteRegKey HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}"
-          SectionEnd
-          "@
-          
-          # 创建 LICENSE 文件（如果不存在）
-          if (!(Test-Path "LICENSE")) {
-            "MIT License" | Out-File -FilePath "LICENSE" -Encoding utf8
-          }
-          
-          # 将 PowerShell 变量中的脚本内容写入 .nsi 文件
-          $nsisScript | Out-File -FilePath "installer.nsi" -Encoding utf8
-          
-          # --- 运行 NSIS 编译命令 ---
-          makensis installer.nsi
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: MSL_windows_installer_${{ needs.extract-version.outputs.version }}.exe
-
   create-release:
     runs-on: ubuntu-latest
-    needs: [extract-version, build-android, build-ios, build-windows, build-windows-installer]
+    needs: [ extract-version, build-android, build-ios ]
     steps:
       - uses: actions/checkout@v4
 
@@ -335,7 +140,5 @@ jobs:
           files: |
             artifacts/android-apk/MSL_android_${{ needs.extract-version.outputs.version }}.apk
             artifacts/ios-ipa/MSL_ios_${{ needs.extract-version.outputs.version }}.ipa
-            artifacts/windows-zip/MSL_windows_${{ needs.extract-version.outputs.version }}.zip
-            artifacts/windows-installer/MSL_windows_installer_${{ needs.extract-version.outputs.version }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

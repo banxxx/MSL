@@ -29,7 +29,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Minecraft Server Link',
+      title: 'MSL',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -118,8 +118,6 @@ class _ServerListScreenState extends State<ServerListScreen>
     final autoRefresh = prefs.getBool('auto_refresh') ?? false;
     final interval = prefs.getInt('refresh_interval') ?? 30;
 
-    print('🔄 加载自动刷新设置: 启用=$autoRefresh, 间隔=${interval}秒');
-
     if (mounted) {
       setState(() {
         _autoRefreshEnabled = autoRefresh;
@@ -138,13 +136,9 @@ class _ServerListScreenState extends State<ServerListScreen>
   void _startAutoRefresh() {
     _stopAutoRefresh(); // 先停止之前的定时器
 
-    print('✅ 启动自动刷新，间隔: $_refreshInterval 秒');
-
     _autoRefreshTimer = Timer.periodic(Duration(seconds: _refreshInterval), (
       timer,
     ) {
-      print('🔄 自动刷新触发 - ${DateTime.now()}');
-
       if (mounted && _servers.isNotEmpty) {
         _silentRefreshAll();
       }
@@ -154,7 +148,6 @@ class _ServerListScreenState extends State<ServerListScreen>
   // 停止自动刷新
   void _stopAutoRefresh() {
     if (_autoRefreshTimer != null) {
-      print('❌ 停止自动刷新'); // 添加日志
     }
 
     _autoRefreshTimer?.cancel();
@@ -163,7 +156,6 @@ class _ServerListScreenState extends State<ServerListScreen>
 
   // 静默刷新所有服务器（不显示加载动画）
   void _silentRefreshAll() {
-    print('📡 静默刷新 ${_servers.length} 个服务器');
     for (var key in _serverCardKeys.values) {
       key.currentState?.refreshStatus(showLoading: false);
     }
@@ -529,6 +521,7 @@ class _ServerListScreenState extends State<ServerListScreen>
       pinned: true,
       elevation: 0,
       backgroundColor: Colors.green[600],
+      automaticallyImplyLeading: false,
       actions: [
         IconButton(
           icon: const Icon(Icons.settings, color: Colors.white),
@@ -537,37 +530,58 @@ class _ServerListScreenState extends State<ServerListScreen>
         ),
         const SizedBox(width: 8),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-        title: const Text(
-          'Minecraft 服务器',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-            color: Colors.black54,
-          ),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.green[400]!, Colors.green[700]!],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -30,
-                top: -30,
-                child: Opacity(
-                  opacity: 0.1,
-                  child: Icon(Icons.dns, size: 200, color: Colors.white),
+      flexibleSpace: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double top = constraints.biggest.height;
+          final double collapsedHeight =
+              kToolbarHeight + MediaQuery.of(context).padding.top;
+
+          // 计算标题不透明度（用于折叠动画）
+          final double opacity = ((top - collapsedHeight) /
+              (140 - collapsedHeight)).clamp(0.0, 1.0);
+
+          return FlexibleSpaceBar(
+            background: Stack(
+              children: [
+                // 渐变背景
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green[400]!, Colors.green[700]!],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
+                // 装饰图标
+                Positioned(
+                  right: -30,
+                  top: -30,
+                  child: Opacity(
+                    opacity: 0.1,
+                    child: Icon(Icons.dns, size: 200, color: Colors.white),
+                  ),
+                ),
+                // 标题 - 左边距固定 16px，与下方卡片对齐
+                Positioned(
+                  left: 16,
+                  bottom: 16,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: const Text(
+                      'Minecraft 服务器',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 34,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

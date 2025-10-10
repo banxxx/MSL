@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -9,7 +10,6 @@ import 'package:minecraft_server_link/services/mcstatus_service.dart';
 import 'package:minecraft_server_link/services/settings_notifier.dart';
 import 'package:minecraft_server_link/widgets/server_detail_screen.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ServerCard extends StatefulWidget {
   final Server server;
@@ -101,10 +101,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
     widget.onExpandedChanged?.call(_isExpanded);
   }
 
-  void _handleLongPress() {
-    // 根据设置决定是否提供震动反馈
-    // 从 Provider 读取设置
-    final settings = context.read<SettingsNotifier>();
+  void _handleLongPress(SettingsNotifier settings) {
     if (settings.hapticFeedback) {
       HapticFeedback.mediumImpact();
     }
@@ -160,73 +157,74 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _toggleExpanded,
-            onLongPress: _handleLongPress,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _buildContent(theme),
+    return Consumer<SettingsNotifier>(
+      builder: (context, settings, child) {
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggleExpanded,
+                onLongPress: () => _handleLongPress(settings),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildContent(theme, settings),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   // 统一的内容构建方法
-  Widget _buildContent(ThemeData theme) {
-    return Consumer<SettingsNotifier>(
-      builder: (context, settings, child) {
-        // 如果有缓存数据，直接使用缓存
-        if (_cachedStatus != null) {
-          return Column(
-            children: [
-              _buildHeader(_cachedStatus!, theme, settings),
-              if (_isExpanded)
-                _buildExpandedContent(_cachedStatus!, theme, settings),
-            ],
-          );
+  Widget _buildContent(ThemeData theme, SettingsNotifier settings) {
+    // 移除内部的 Consumer，直接使用传入的 settings
+    // 如果有缓存数据，直接使用缓存
+    if (_cachedStatus != null) {
+      return Column(
+        children: [
+          _buildHeader(_cachedStatus!, theme, settings),
+          if (_isExpanded)
+            _buildExpandedContent(_cachedStatus!, theme, settings),
+        ],
+      );
+    }
+
+    // 如果有缓存错误，显示错误状态
+    if (_cachedError != null) {
+      return _buildErrorState(theme, settings);
+    }
+
+    // 否则使用 FutureBuilder（初次加载或手动刷新）
+    return FutureBuilder<ServerStatus>(
+      future: _statusFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingState(settings);
         }
 
-        // 如果有缓存错误，显示错误状态
-        if (_cachedError != null) {
+        if (snapshot.hasError) {
           return _buildErrorState(theme, settings);
         }
 
-        // 否则使用 FutureBuilder（初次加载或手动刷新）
-        return FutureBuilder<ServerStatus>(
-          future: _statusFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return _buildLoadingState(settings);
-            }
+        final status = snapshot.data!;
+        // 更新缓存
+        _cachedStatus = status;
+        _cachedError = null;
+        _isLoading = false;
 
-            if (snapshot.hasError) {
-              return _buildErrorState(theme, settings);
-            }
-
-            final status = snapshot.data!;
-            // 更新缓存
-            _cachedStatus = status;
-            _cachedError = null;
-            _isLoading = false;
-
-            return Column(
-              children: [
-                _buildHeader(status, theme, settings),
-                if (_isExpanded)
-                  _buildExpandedContent(status, theme, settings),
-              ],
-            );
-          },
+        return Column(
+          children: [
+            _buildHeader(status, theme, settings),
+            if (_isExpanded)
+              _buildExpandedContent(status, theme, settings),
+          ],
         );
       },
     );
@@ -235,7 +233,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
   Widget _buildLoadingState(SettingsNotifier settings) {
     return Row(
       children: [
-        _buildServerIcon(null),
+        _buildServerIcon(null, settings),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -271,7 +269,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
   Widget _buildErrorState(ThemeData theme, SettingsNotifier settings) {
     return Row(
       children: [
-        _buildServerIcon(null),
+        _buildServerIcon(null, settings),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -303,7 +301,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        _buildServerIcon(status.icon),
+        _buildServerIcon(status.icon, settings),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -625,7 +623,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _buildServerIcon(String? iconData) {
+  Widget _buildServerIcon(String? iconData, SettingsNotifier settings) {
     const size = 65.0;
 
     Widget iconWidget;
@@ -657,8 +655,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          // 根据设置决定是否提供震动反馈
-          final settings = context.read<SettingsNotifier>();
+          // 直接使用传入的 settings 参数
           if (settings.hapticFeedback) {
             HapticFeedback.lightImpact();
           }
@@ -669,7 +666,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
             MaterialPageRoute(
               builder: (context) => ServerDetailScreen(
                 server: widget.server,
-                initialStatus: _cachedStatus, // 传递缓存的状态，避免重复加载
+                initialStatus: _cachedStatus,
               ),
             ),
           );

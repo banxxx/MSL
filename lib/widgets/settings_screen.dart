@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:minecraft_server_link/services/settings_notifier.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,19 +20,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _version = '';
   bool _isLoading = true;
 
+  static const _cardElevation = 0.0;
+  // 防抖计时器
+  Timer? _debounceTimer;
+  // 防抖时间，例如 500 毫秒
+  final Duration _debounceDuration = const Duration(milliseconds: 500);
+  // 缓存Future，避免重复调用
+  late Future<String> _versionFuture;
+
+  // GitHub 仓库信息
+  static const String _githubOwner = 'banxxx';
+  static const String _githubRepo = 'MSL';
+  static const String _githubReleasesApi =
+      'https://api.github.com/repos/$_githubOwner/$_githubRepo/releases/latest';
+
   final List<int> _refreshIntervals = [30, 60, 120, 300];
 
   @override
   void initState() {
     super.initState();
+    // 初始化缓存的Future，只在页面初始化时执行一次
+    _versionFuture = getAppVersion();
     _loadVersion();
     // 延迟一帧后设置加载完成，确保 Provider 已初始化
+    _isLoading = false;
+    setState(() {
+    });
+    if (mounted) {
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     });
   }
 
@@ -265,18 +287,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: Icons.description,
                           onTap: _showAboutDialog,
                         ),
-                        _buildTapTile(
-                          title: '版本信息',
-                          subtitle: _version.isEmpty ? '加载中...' : _version,
-                          icon: Icons.info_outline,
-                          onTap: null,
-                        ),
+                        // 版本信息模块（增加点击功能）
+                        _buildVersionInfo(context),
                       ],
                     ),
 
                     const SizedBox(height: 32),
                     Text(
-                      'Made with ❤️ for Minecraft Players',
+                      'Made with for Minecraft Players',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey[500],
@@ -304,37 +322,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
         icon: const Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-        title: const Text(
-          '设置',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-            color: Colors.white,
-          ),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.green[400]!, Colors.green[700]!],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -30,
-                top: -30,
-                child: Opacity(
-                  opacity: 0.1,
-                  child: Icon(Icons.settings, size: 200, color: Colors.white),
+      flexibleSpace: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double top = constraints.biggest.height;
+          final double collapsedHeight =
+              kToolbarHeight + MediaQuery.of(context).padding.top;
+
+          final double opacity = ((top - collapsedHeight) /
+              (140 - collapsedHeight)).clamp(0.0, 1.0);
+
+          return FlexibleSpaceBar(
+            background: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green[400]!, Colors.green[700]!],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
+                Positioned(
+                  right: -30,
+                  top: -30,
+                  child: Opacity(
+                    opacity: 0.1,
+                    child: Icon(Icons.settings, size: 200, color: Colors.white),
+                  ),
+                ),
+                Positioned(
+                  left: 20,
+                  bottom: 16,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: const Text(
+                      '设置',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 34,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -381,6 +416,311 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildVersionInfo(BuildContext context) {
+    return _customCard(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _checkForUpdateDebounced(),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // 添加这一行
+          leading: Icon(Icons.upload_rounded, color: Colors.green[600]),
+          title: const Text('检查更新'),
+          subtitle: FutureBuilder<String>(
+            future: _versionFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done) {
+                return Text(
+                  '当前版本: ${snapshot.data ?? "未知"}',
+                );
+              } else {
+                return const Text(
+                  '正在获取版本号...',
+                );
+              }
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 防抖包装函数，用于延迟执行更新检查
+  void _checkForUpdateDebounced() {
+    // 如果上一个计时器还在运行，就取消它
+    if (_debounceTimer?.isActive ?? false) {
+      _debounceTimer?.cancel();
+    }
+    // 设置一个新的计时器
+    _debounceTimer = Timer(_debounceDuration, () {
+      _checkForUpdate(); // 计时器结束后执行实际的更新检查逻辑，不传递 context
+    });
+  }
+
+  Widget _customCard({required Widget child, VoidCallback? onTap}) {
+    return Card(
+      color: Colors.white,
+      elevation: _cardElevation,
+      shape: RoundedRectangleBorder(
+        // 添加圆角
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12), // 圆角匹配卡片
+        onTap: onTap,
+        child: child,
+      ),
+    );
+  }
+
+  // 检查更新逻辑 (实际的逻辑，现在由防抖函数调用)
+  // 注意：此方法不再接收 BuildContext 参数，而是直接使用 this.context
+  void _checkForUpdate() async {
+    // 在显示加载指示器前确保 State 仍然挂载
+    if (!mounted) return;
+
+    // 显示加载指示器，防止用户疑惑
+    showDialog(
+      context: context, // 使用 this.context
+      barrierDismissible: false, // 不允许点击外部关闭
+      builder:
+          (ctx) => const AlertDialog(
+        // 这里的 ctx 是 dialog 自己的 context，总是安全的
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('正在检查更新...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // 首先检查网络连接
+      final hasNetwork = await _checkNetworkConnection();
+      if (!hasNetwork) {
+        // 在关闭加载指示器前确保 State 仍然挂载
+        if (!mounted) return;
+        Navigator.pop(context); // 关闭加载指示器
+
+        // 在显示错误弹窗前确保 State 仍然挂载
+        if (!mounted) return;
+        _showErrorDialog(context, '无网络连接，请检查网络设置后重试。');
+        return;
+      }
+
+      // 获取本地版本和远程版本
+      final localVersion = await getAppVersion();
+      final latestRelease = await _getLatestReleaseFromGitHub();
+
+      // 在关闭加载指示器前确保 State 仍然挂载
+      if (!mounted) return;
+      // 关闭加载指示器
+      Navigator.pop(context); // 使用 this.context
+
+      if (latestRelease != null) {
+        final githubVersion = latestRelease['tag_name'] as String;
+        final releaseBody = latestRelease['body'] as String;
+        final releaseUrl = latestRelease['html_url'] as String;
+
+        // 在显示弹窗前确保 State 仍然挂载
+        if (!mounted) return;
+        if (_compareVersions(githubVersion, localVersion) > 0) {
+          _showUpdateDialog(
+            context, // 使用 this.context
+            githubVersion,
+            releaseBody,
+            releaseUrl,
+          );
+        } else {
+          _showNoUpdateDialog(context); // 使用 this.context
+        }
+      } else {
+        // 在显示错误弹窗前确保 State 仍然挂载
+        if (!mounted) return;
+        _showErrorDialog(context, '无法获取更新信息，请稍后再试。'); // 使用 this.context
+      }
+    } on SocketException catch (_) {
+      // 网络连接异常
+      if (!mounted) return;
+      Navigator.pop(context); // 关闭加载指示器
+      if (!mounted) return;
+      _showErrorDialog(context, '无网络连接，请检查网络设置后重试。');
+    } on TimeoutException catch (_) {
+      // 请求超时
+      if (!mounted) return;
+      Navigator.pop(context); // 关闭加载指示器
+      if (!mounted) return;
+      _showErrorDialog(context, '网络连接超时，请稍后再试。');
+    } on HttpException catch (_) {
+      // HTTP异常
+      if (!mounted) return;
+      Navigator.pop(context); // 关闭加载指示器
+      if (!mounted) return;
+      _showErrorDialog(context, '服务器连接异常，请稍后再试。');
+    } catch (e) {
+      // 其他异常
+      if (!mounted) return;
+      Navigator.pop(context); // 关闭加载指示器
+      if (!mounted) return;
+      _showErrorDialog(
+        context,
+        '检查更新时发生错误: ${e.toString()}',
+      ); // 使用 this.context
+    }
+  }
+
+  // 从 GitHub API 获取最新发布信息
+  Future<Map<String, dynamic>?> _getLatestReleaseFromGitHub() async {
+    try {
+      final response = await http.get(
+        Uri.parse(_githubReleasesApi),
+        headers: {'User-Agent': 'Flutter-App'}, // 添加User-Agent头
+      ).timeout(const Duration(seconds: 10)); // 设置10秒超时
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else if (response.statusCode == 403) {
+        // GitHub API 限制
+        throw HttpException('GitHub API 请求限制，请稍后再试');
+      } else if (response.statusCode == 404) {
+        // 仓库不存在或发布不存在
+        throw HttpException('未找到发布信息，请检查仓库配置');
+      } else {
+        // 其他HTTP错误
+        throw HttpException('服务器返回错误: ${response.statusCode}');
+      }
+    } on SocketException catch (_) {
+      // 网络连接异常
+      throw SocketException('网络连接失败');
+    } on TimeoutException catch (_) {
+      // 请求超时
+      throw TimeoutException('请求超时', const Duration(seconds: 10));
+    } on HttpException catch (_) {
+      // HTTP异常，重新抛出
+      rethrow;
+    } catch (e) {
+      // 其他异常（如JSON解析错误等）
+      throw Exception('数据解析错误: ${e.toString()}');
+    }
+  }
+
+  // 检查网络连接状态
+  Future<bool> _checkNetworkConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    }
+  }
+
+  // 显示错误弹窗
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+        title: const Text('错误'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 显示有可用更新的弹窗
+  void _showUpdateDialog(
+      BuildContext context,
+      String githubVersion,
+      String releaseBody,
+      String releaseUrl,
+      ) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+        title: Text('发现新版本：$githubVersion'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('更新内容：'),
+              const SizedBox(height: 8),
+              Text(releaseBody),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('稍后更新'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // 关闭弹窗
+              _launchUrl(releaseUrl); // 打开 GitHub 发布页面
+            },
+            child: const Text('立即更新'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 打开 URL
+  Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      throw Exception('无法打开: $url');
+    }
+  }
+
+  // 显示没有可用更新的弹窗
+  void _showNoUpdateDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+        title: const Text('已是最新版本'),
+        content: const Text('当前已安装最新版本的应用。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 比较两个版本字符串（简单比较，复杂版本需调整，已处理 'v' 前缀）
+  // 返回 > 0 如果 version1 较新，< 0 如果 version2 较新，0 如果相同。
+  int _compareVersions(String version1, String version2) {
+    // 移除版本号开头的 'v'，如果存在的话
+    final cleanVersion1 =
+    version1.startsWith('v') ? version1.substring(1) : version1;
+    final cleanVersion2 =
+    version2.startsWith('v') ? version2.substring(1) : version2;
+
+    final v1Parts = cleanVersion1.split('.').map(int.parse).toList();
+    final v2Parts = cleanVersion2.split('.').map(int.parse).toList();
+
+    for (int i = 0; i < v1Parts.length; i++) {
+      if (i >= v2Parts.length) return 1; // v1 有更多部分，因此更新
+      if (v1Parts[i] > v2Parts[i]) return 1;
+      if (v1Parts[i] < v2Parts[i]) return -1;
+    }
+    if (v2Parts.length > v1Parts.length) return -1; // v2 有更多部分，因此更新
+    return 0; // 版本号相同
   }
 
   Widget _buildSwitchTile({
@@ -450,5 +790,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : null,
       onTap: onTap,
     );
+  }
+
+  // 异步获取应用版本信息
+  Future<String> getAppVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    return packageInfo.version; // 返回版本号
   }
 }
