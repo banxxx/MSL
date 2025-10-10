@@ -9,6 +9,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/mcstatus_service.dart';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -274,6 +276,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             settings.updateSetting('haptic_feedback', value);
                           },
                         ),
+                      ],
+                    ),
+
+                    _buildSection(
+                      title: 'Minetrack 设置',
+                      icon: Icons.api,
+                      children: [
+                        _buildTapTile(
+                          title: 'API 地址配置',
+                          subtitle: settings.historyServerUrl.isEmpty
+                              ? '未配置（点击设置）'
+                              : settings.historyServerUrl,
+                          icon: Icons.link,
+                          onTap: () => _showHistoryUrlDialog(settings),
+                        ),
+                        if (settings.historyServerUrl.isNotEmpty)
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            leading: Icon(Icons.check_circle, color: Colors.green[600]),
+                            title: const Text(
+                              '地址已配置',
+                              style: TextStyle(fontSize: 13, color: Colors.grey),
+                            ),
+                            trailing: TextButton(
+                              onPressed: () => _clearHistoryUrl(settings),
+                              child: const Text('清除'),
+                            ),
+                          ),
                       ],
                     ),
 
@@ -796,5 +826,211 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<String> getAppVersion() async {
     final packageInfo = await PackageInfo.fromPlatform();
     return packageInfo.version; // 返回版本号
+  }
+
+  Future<void> _showHistoryUrlDialog(SettingsNotifier settings) async {
+    final controller = TextEditingController(text: settings.historyServerUrl);
+    bool isValidating = false;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text('配置 Minetrack API 地址'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '请输入完整的 API 地址',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '例如: https://example.com/api',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                enabled: !isValidating,
+                decoration: InputDecoration(
+                  hintText: 'https://your-domain.com/api',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.link),
+                ),
+              ),
+              if (isValidating)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.green[600],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        '正在验证连接...',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isValidating ? null : () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: isValidating
+                  ? null
+                  : () async {
+                final url = controller.text.trim();
+
+                if (url.isEmpty) {
+                  Navigator.pop(context, '');
+                  return;
+                }
+
+                setState(() {
+                  isValidating = true;
+                });
+
+                try {
+                  final isValid = await MCStatusService.validateApiUrl(url);
+
+                  if (!context.mounted) return;
+
+                  if (isValid) {
+                    Navigator.pop(context, url);
+                  } else {
+                    setState(() {
+                      isValidating = false;
+                    });
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Row(
+                          children: [
+                            Icon(Icons.error, color: Colors.white),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text('无法连接到该地址，请检查 URL 是否正确'),
+                            ),
+                          ],
+                        ),
+                        backgroundColor: Colors.red[600],
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        margin: const EdgeInsets.all(16),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (!context.mounted) return;
+
+                  setState(() {
+                    isValidating = false;
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.error, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text('验证失败: ${e.toString()}'),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: Colors.red[600],
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      margin: const EdgeInsets.all(16),
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isValidating ? Colors.grey : Colors.green[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await settings.updateSetting('history_server_url', result);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(result.isEmpty ? '已清除配置' : '地址配置成功'),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearHistoryUrl(SettingsNotifier settings) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text('清除配置'),
+        content: const Text('确定要清除 Minetrack API 地址配置吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await settings.updateSetting('history_server_url', '');
+    }
   }
 }

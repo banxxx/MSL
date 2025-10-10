@@ -9,6 +9,7 @@ class SettingsNotifier extends ChangeNotifier {
   bool _autoRefresh = false;
   int _refreshInterval = 30;
   String _themeMode = 'system';
+  String _historyServerUrl = '';
 
   bool get showPlayerCount => _showPlayerCount;
   bool get showMotd => _showMotd;
@@ -17,6 +18,8 @@ class SettingsNotifier extends ChangeNotifier {
   bool get autoRefresh => _autoRefresh;
   int get refreshInterval => _refreshInterval;
   String get themeMode => _themeMode;
+  String get historyServerUrl => _historyServerUrl;
+  bool get isHistoryServerConfigured => _historyServerUrl.isNotEmpty;
 
   SettingsNotifier() {
     _loadSettings();
@@ -31,6 +34,7 @@ class SettingsNotifier extends ChangeNotifier {
     _autoRefresh = prefs.getBool('auto_refresh') ?? false;
     _refreshInterval = prefs.getInt('refresh_interval') ?? 30;
     _themeMode = prefs.getString('theme_mode') ?? 'system';
+    _historyServerUrl = prefs.getString('history_server_url') ?? ''; // 新增
     notifyListeners();
   }
 
@@ -65,6 +69,10 @@ class SettingsNotifier extends ChangeNotifier {
         break;
       case 'theme_mode':
         _themeMode = value as String;
+        await prefs.setString(key, value);
+        break;
+      case 'history_server_url': // 新增
+        _historyServerUrl = value as String;
         await prefs.setString(key, value);
         break;
     }

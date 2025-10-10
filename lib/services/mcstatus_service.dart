@@ -1,20 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:minecraft_server_link/services/settings_notifier.dart';
 import '../models/history_data_point.dart';
 import '../models/server_status.dart';
 import '../models/server.dart';
 
 class MCStatusService {
   static const String _baseUrl = 'https://api.mcstatus.io/v2/status/';
-  static const String _historyUrl = 'https://minetrack.banxx.cn/api';
-  // static const String _historyUrl = 'http://10.0.2.2:8089/api';
+
+  final SettingsNotifier _settings;
+
+  MCStatusService(this._settings);
+
+  String get _historyUrl => _settings.historyServerUrl;
 
   /// 根据服务器类型获取状态
   Future<ServerStatus> getServerStatus(
-      String address,
-      ServerType type, {
-        int? port,
-      }) async {
+    String address,
+    ServerType type, {
+    int? port,
+  }) async {
     final endpoint = type == ServerType.java ? 'java' : 'bedrock';
     final fullAddress = port != null ? '$address:$port' : address;
 
@@ -32,25 +37,24 @@ class MCStatusService {
 
   /// 便捷方法：直接传入 Server 对象
   Future<ServerStatus> getServerStatusFromServer(Server server) async {
-    return getServerStatus(
-      server.address,
-      server.type,
-      port: server.port,
-    );
+    return getServerStatus(server.address, server.type, port: server.port);
   }
 
   /// 获取历史数据
   Future<HistoryData> getServerHistory(
-      String serverIp, String port, {
-        int? startTime,
-        int? endTime,
-        int limit = 1000,
-      }) async {
+    String serverIp,
+    String port, {
+    int? startTime,
+    int? endTime,
+    int limit = 1000,
+  }) async {
+    // 检查是否配置了地址
+    if (_historyUrl.isEmpty) {
+      throw Exception('Minetrack地址未配置');
+    }
     try {
       // 构建查询参数
-      final queryParams = <String, String>{
-        'limit': limit.toString(),
-      };
+      final queryParams = <String, String>{'limit': limit.toString()};
       if (startTime != null) {
         queryParams['start'] = startTime.toString();
       }
@@ -58,8 +62,9 @@ class MCStatusService {
         queryParams['end'] = endTime.toString();
       }
 
-      final uri = Uri.parse('$_historyUrl/history/$serverIp/$port')
-          .replace(queryParameters: queryParams);
+      final uri = Uri.parse(
+        '$_historyUrl/history/$serverIp/$port',
+      ).replace(queryParameters: queryParams);
 
       final response = await http.get(uri);
 
@@ -76,6 +81,7 @@ class MCStatusService {
 
   /// 添加新服务器到后端
   Future<bool> addServer(Server server) async {
+    if (_historyUrl.isEmpty) return false;
     try {
       final uri = Uri.parse('$_historyUrl/servers/add');
 
@@ -114,6 +120,7 @@ class MCStatusService {
 
   /// 更新服务器信息
   Future<bool> updateServer(Server server, String oldAddress) async {
+    if (_historyUrl.isEmpty) return false;
     try {
       // 使用旧地址作为查询参数，因为 IP 可能被修改了
       final uri = Uri.parse('$_historyUrl/servers/$oldAddress');
@@ -123,7 +130,6 @@ class MCStatusService {
         'port': server.port,
         'type': _convertServerTypeToAPI(server.type),
       };
-
 
       final response = await http.put(
         uri,
@@ -158,14 +164,13 @@ class MCStatusService {
 
   /// 从后端删除服务器
   Future<bool> deleteServer(String serverAddress) async {
+    if (_historyUrl.isEmpty) return false;
     try {
       final uri = Uri.parse('$_historyUrl/servers/$serverAddress');
 
       final response = await http.delete(
         uri,
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: {'Accept': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -177,6 +182,35 @@ class MCStatusService {
 
       return false;
     } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> validateApiUrl(String apiUrl) async {
+    if (apiUrl.isEmpty) {
+      return false;
+    }
+
+    try {
+      // 移除末尾的斜杠（如果有）
+      final cleanUrl = apiUrl.endsWith('/') ? apiUrl.substring(0, apiUrl.length - 1) : apiUrl;
+
+      final uri = Uri.parse('$cleanUrl/health');
+
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 5)); // 5秒超时
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // 检查返回的数据是否包含 status: 'ok'
+        return data['status'] == 'ok';
+      }
+
+      return false;
+    } catch (e) {
+      // 网络错误、超时、解析错误等
       return false;
     }
   }

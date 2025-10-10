@@ -1,13 +1,116 @@
-# minecraft_server_link
+# MSL - Minecraft Server Tracker
 
-A Minecraft server status checker
+<div align="center">
 
-## Getting Started
+[![Flutter](https://img.shields.io/badge/Flutter-3.29.3-02569B?logo=flutter)](https://flutter.dev)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-brightgreen)]()
+[![License](https://img.shields.io/github/license/YOUR_USERNAME/YOUR_REPO)]()
+[![Release](https://img.shields.io/githu/banxxx/MSL/releases)]()
 
-This project is a starting point for a Flutter application.
+**一款基于 Flutter 开发的跨平台 Minecraft 服务器监控应用**
 
-A few resources to get you started if this is your first Flutter project:
+[English](README_EN.md) | 简体中文
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## ✨ 特性
+
+- 🎯 **实时监控** - 实时查看 Minecraft 服务器在线人数
+- 📊 **历史数据** - 查看服务器历史在线人数趋势图表
+- 🔄 **多服务器支持** - 同时监控多个服务器状态
+- 📱 **跨平台** - 支持 Android 和 iOS 平台
+- 🎨 **现代化 UI** - 简洁美观的用户界面
+- 🔒 **隐私优先** - 不收集任何用户数据
+
+## 🛠️ 技术栈
+
+- **框架**: Flutter 3.29.3
+- **数据后端**: [Minetrack](https://github.com/Cryptkeeper/Minetrack)
+- **状态管理**: Provider / Riverpod（根据你的实际情况修改）
+- **网络请求**: Dio / http（根据你的实际情况修改）
+- **图表展示**: fl_chart（根据你的实际情况修改）
+
+## 📋 系统要求
+
+### Android
+- Android 5.0 (API 21) 或更高版本
+- 约 30MB 存储空间
+
+### iOS
+- iOS 12.0 或更高版本
+- 需要自签名安装
+- 约 40MB 存储空间
+
+## 📄 许可证
+
+本项目采用 [MIT License](LICENSE) 开源协议。
+
+## ⚠️ 免责声明
+
+1. **非官方应用**
+    - 本应用不是 Mojang Studios 或 Microsoft 的官方产品
+    - 与 Minecraft 官方无任何关联
+    - Minecraft 是 Mojang Studios 的注册商标
+
+2. **使用风险**
+    - 本应用按"现状"提供，不提供任何形式的保证
+    - 开发者不对使用本应用造成的任何损失负责
+    - 用户需自行承担使用本应用的风险
+
+3. **数据准确性**
+    - 应用显示的服务器部分数据取决于后端服务（Minetrack）的准确性
+    - 开发者不保证数据的实时性和准确性
+    - 服务器数据仅供参考
+
+4. **合规使用**
+    - 用户应遵守所在地区的法律法规
+    - 禁止将本应用用于任何非法用途
+    - 用户需遵守所监控服务器的使用条款
+
+## 🔐 隐私政策
+
+### 数据收集
+
+**本应用不收集任何用户个人信息或隐私数据。**
+
+具体说明：
+
+- ✅ **本地存储** - 应用配置和缓存数据仅保存在本地设备
+- ✅ **无追踪** - 不使用任何数据分析或追踪服务
+- ✅ **无广告** - 不集成任何广告 SDK
+- ✅ **无账号系统** - 无需注册或登录
+- ✅ **透明通信** - 仅与用户配置的 Minetrack 服务器通信
+
+### 网络权限
+
+应用需要以下权限：
+
+- **互联网访问** - 用于连接 Minetrack 后端服务获取服务器数据
+- **网络状态** - 用于检查网络连接状态
+
+### 数据存储
+
+应用在本地存储以下数据：
+
+- 用户配置的服务器列表
+- 应用设置偏好
+- 临时缓存数据
+
+以上所有数据均存储在用户设备本地，不会上传到任何服务器。
+
+### 第三方服务
+
+本应用与用户自行部署的 Minetrack 服务器通信：
+
+- 通信内容：服务器地址、查询请求
+- 数据处理：由用户自行控制的 Minetrack 服务处理
+- 建议：请使用 HTTPS 加密连接保护数据传输
+
+### 数据删除
+
+- 卸载应用即可完全删除所有本地数据
+- 无需额外的数据删除操作
+
+### 隐私政策更新
+
+如有任何隐私政策变更，将在此文档中更新并在应用中通知用户。

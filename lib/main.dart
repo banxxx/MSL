@@ -15,8 +15,14 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        Provider(create: (_) => MCStatusService()),
         ChangeNotifierProvider(create: (_) => SettingsNotifier()),
+        ProxyProvider<SettingsNotifier, MCStatusService>(
+          create: (context) => MCStatusService(
+            Provider.of<SettingsNotifier>(context, listen: false),
+          ),
+          update: (_, settings, previous) =>
+          previous ?? MCStatusService(settings),
+        ),
       ],
       child: const MyApp(),
     ),

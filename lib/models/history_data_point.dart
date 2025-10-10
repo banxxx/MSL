@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../services/mcstatus_service.dart';
+import '../services/settings_notifier.dart';
+import '../widgets/settings_screen.dart';
 
 // ========== 数据模型 ==========
 class HistoryDataPoint {
@@ -96,7 +98,6 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
   late Future<HistoryData> _historyFuture;
   String _selectedTimeRange = '24h';
   bool _showArea = true;
-  late MCStatusService _service;
 
   final Map<String, int> _timeRanges = {
     '1h': 1,
@@ -109,7 +110,14 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
   @override
   void initState() {
     super.initState();
-    _service = context.read<MCStatusService>();
+    // 初始化为未配置状态
+    _historyFuture = Future.error('初始化中...');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 在这里可以安全地访问 context
     _loadHistory();
   }
 
@@ -120,16 +128,24 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
   }
 
   Future<HistoryData> _fetchHistoryData() async {
-    final hours = _timeRanges[_selectedTimeRange]!;
-    final endTime = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final startTime = endTime - (hours * 60 * 60 * 1000);
+    try {
+      final settings = context.read<SettingsNotifier>();
+      final service = MCStatusService(settings);
 
-    return await _service.getServerHistory(
-      widget.serverIp, widget.port,
-      startTime: startTime,
-      endTime: endTime,
-      limit: 100000,
-    );
+      final hours = _timeRanges[_selectedTimeRange]!;
+      final endTime = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final startTime = endTime - (hours * 60 * 60 * 1000);
+
+      return await service.getServerHistory(
+        widget.serverIp,
+        widget.port,
+        startTime: startTime,
+        endTime: endTime,
+        limit: 100000,
+      );
+    } catch (e) {
+      throw Exception(e.toString());
+    }
   }
 
   @override
@@ -157,7 +173,13 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
                   }
 
                   if (snapshot.hasError) {
-                    return _buildErrorState(snapshot.error.toString());
+                    final errorMsg = snapshot.error.toString();
+                    // 检查是否是未配置错误
+                    if (errorMsg.contains('未配置') ||
+                        errorMsg.contains('Exception: Minetrack')) {
+                      return _buildEmptyState();
+                    }
+                    return _buildErrorState(errorMsg);
                   }
 
                   if (!snapshot.hasData || snapshot.data!.data.isEmpty) {
@@ -559,18 +581,21 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
   }
 
   Widget _buildEmptyState() {
+    final settings = context.read<SettingsNotifier>();
+    final isConfigured = settings.isHistoryServerConfigured;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.show_chart,
+            isConfigured ? Icons.show_chart : Icons.link_off,
             size: 60,
             color: Colors.grey[300],
           ),
           const SizedBox(height: 16),
           Text(
-            '暂无历史数据',
+            isConfigured ? '暂无历史数据' : 'Minetrack地址未配置',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],
@@ -578,12 +603,24 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
           ),
           const SizedBox(height: 8),
           Text(
-            '时间范围: $_selectedTimeRange',
+            isConfigured
+                ? '时间范围: $_selectedTimeRange'
+                : '请在设置中配置 API 地址',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey[500],
             ),
           ),
+          if (!isConfigured) ...[
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+              },
+              icon: const Icon(Icons.settings),
+              label: const Text('前往设置'),
+            ),
+          ],
         ],
       ),
     );
