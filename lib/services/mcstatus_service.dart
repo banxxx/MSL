@@ -6,8 +6,8 @@ import '../models/server.dart';
 
 class MCStatusService {
   static const String _baseUrl = 'https://api.mcstatus.io/v2/status/';
-  // static const String _historyUrl = 'https://minetrack.banxx.cn/api';
-  static const String _historyUrl = 'http://10.0.2.2:8089/api';
+  static const String _historyUrl = 'https://minetrack.banxx.cn/api';
+  // static const String _historyUrl = 'http://10.0.2.2:8089/api';
 
   /// 根据服务器类型获取状态
   Future<ServerStatus> getServerStatus(
