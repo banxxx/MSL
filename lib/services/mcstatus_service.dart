@@ -6,7 +6,8 @@ import '../models/server.dart';
 
 class MCStatusService {
   static const String _baseUrl = 'https://api.mcstatus.io/v2/status/';
-  static const String _historyUrl = 'https://minetrack.banxx.cn/api';
+  // static const String _historyUrl = 'https://minetrack.banxx.cn/api';
+  static const String _historyUrl = 'http://10.0.2.2:8089/api';
 
   /// 根据服务器类型获取状态
   Future<ServerStatus> getServerStatus(
@@ -40,7 +41,7 @@ class MCStatusService {
 
   /// 获取历史数据
   Future<HistoryData> getServerHistory(
-      String serverIp, {
+      String serverIp, String port, {
         int? startTime,
         int? endTime,
         int limit = 1000,
@@ -57,7 +58,7 @@ class MCStatusService {
         queryParams['end'] = endTime.toString();
       }
 
-      final uri = Uri.parse('$_historyUrl/history/$serverIp')
+      final uri = Uri.parse('$_historyUrl/history/$serverIp/$port')
           .replace(queryParameters: queryParams);
 
       final response = await http.get(uri);

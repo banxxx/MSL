@@ -195,6 +195,7 @@ class _ServerDetailScreenState extends State<ServerDetailScreen>
                           const SizedBox(height: 16),
                           ServerHistoryChart(
                             serverIp: widget.server.address,
+                            port: widget.server.port.toString(),
                             chartColor: Colors.green[600]!,
                           ),
                         ],

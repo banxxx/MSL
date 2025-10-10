@@ -138,7 +138,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
           // 毛玻璃模糊层
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
+              filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.grey.shade200.withOpacity(0.5),
@@ -657,7 +657,7 @@ class ServerCardState extends State<ServerCard> with SingleTickerProviderStateMi
         onTap: () {
           // 直接使用传入的 settings 参数
           if (settings.hapticFeedback) {
-            HapticFeedback.lightImpact();
+            HapticFeedback.mediumImpact();
           }
 
           // 导航到详情页面

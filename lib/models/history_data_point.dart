@@ -38,10 +38,12 @@ class HistoryDataPoint {
 
 class HistoryData {
   final String ip;
+  final String port;
   final List<HistoryDataPoint> data;
 
   HistoryData({
     required this.ip,
+    required this.port,
     required this.data,
   });
 
@@ -51,6 +53,7 @@ class HistoryData {
     if (dataList == null) {
       return HistoryData(
         ip: json['ip'] as String? ?? '',
+        port: json['port'] as String? ?? '25565',
         data: [],
       );
     }
@@ -66,6 +69,7 @@ class HistoryData {
 
     return HistoryData(
       ip: json['ip'] as String? ?? '',
+      port: json['port'] as String? ?? '25565',
       data: points,
     );
   }
@@ -74,11 +78,13 @@ class HistoryData {
 // ========== 图表组件 ==========
 class ServerHistoryChart extends StatefulWidget {
   final String serverIp;
+  final String port;
   final Color chartColor;
 
   const ServerHistoryChart({
     super.key,
     required this.serverIp,
+    required this.port,
     this.chartColor = Colors.green,
   });
 
@@ -119,7 +125,7 @@ class _ServerHistoryChartState extends State<ServerHistoryChart> {
     final startTime = endTime - (hours * 60 * 60 * 1000);
 
     return await _service.getServerHistory(
-      widget.serverIp,
+      widget.serverIp, widget.port,
       startTime: startTime,
       endTime: endTime,
       limit: 100000,
