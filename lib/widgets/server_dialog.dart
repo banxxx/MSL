@@ -3,8 +3,38 @@ import 'package:flutter/services.dart';
 import 'package:minecraft_server_link/models/server.dart';
 import 'package:uuid/uuid.dart';
 
+class _DialogConstants {
+  static const maxWidth = 500.0;
+  static const headerPadding = EdgeInsets.all(24);
+  static const contentPadding = EdgeInsets.fromLTRB(24, 8, 24, 24);
+  static const borderRadius = 24.0;
+  static const iconSize = 28.0;
+  static const animationDuration = Duration(milliseconds: 300);
+  static const validationDelay = Duration(milliseconds: 500);
+
+  static BoxDecoration headerDecoration = BoxDecoration(
+    gradient: LinearGradient(
+      colors: [Colors.green[400]!, Colors.green[600]!],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    borderRadius: const BorderRadius.only(
+      topLeft: Radius.circular(borderRadius),
+      topRight: Radius.circular(borderRadius),
+    ),
+  );
+
+  static BoxDecoration footerDecoration = BoxDecoration(
+    color: Colors.grey[50],
+    borderRadius: const BorderRadius.only(
+      bottomLeft: Radius.circular(borderRadius),
+      bottomRight: Radius.circular(borderRadius),
+    ),
+  );
+}
+
 class ServerDialog extends StatefulWidget {
-  final Server? server; // 支持编辑模式
+  final Server? server;
 
   const ServerDialog({super.key, this.server});
 
@@ -34,7 +64,7 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
     );
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: _DialogConstants.animationDuration,
       vsync: this,
     );
     _scaleAnimation = CurvedAnimation(
@@ -56,14 +86,13 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
   void _onTypeChanged(ServerType? type) {
     if (type == null || type == _selectedType) return;
 
+    final currentPort = int.tryParse(_portController.text);
+    final oldDefaultPort = _selectedType == ServerType.java
+        ? ServerType.bedrock.defaultPort
+        : ServerType.java.defaultPort;
+
     setState(() {
       _selectedType = type;
-      // 如果端口是旧类型的默认端口，则自动更新为新类型的默认端口
-      final currentPort = int.tryParse(_portController.text);
-      final oldDefaultPort = _selectedType == ServerType.java
-          ? ServerType.bedrock.defaultPort
-          : ServerType.java.defaultPort;
-
       if (currentPort == oldDefaultPort) {
         _portController.text = type.defaultPort.toString();
       }
@@ -75,8 +104,7 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
 
     setState(() => _isLoading = true);
 
-    // 模拟验证延迟，让用户看到加载状态
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(_DialogConstants.validationDelay);
 
     final server = Server(
       id: widget.server?.id ?? const Uuid().v4(),
@@ -93,70 +121,81 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isEdit = widget.server != null;
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: Dialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(_DialogConstants.borderRadius),
         ),
         elevation: 8,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 500),
+          constraints: const BoxConstraints(maxWidth: _DialogConstants.maxWidth),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 头部
-              _buildHeader(isEdit, theme),
-
-              // 表单内容
+              _DialogHeader(isEdit: isEdit),
               Flexible(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  padding: _DialogConstants.contentPadding,
                   child: Form(
                     key: _formKey,
                     child: Column(
                       children: [
-                        _buildTypeSelector(),
+                        _TypeSelector(
+                          selectedType: _selectedType,
+                          isLoading: _isLoading,
+                          onChanged: _onTypeChanged,
+                        ),
                         const SizedBox(height: 20),
-                        _buildNameField(),
+                        _NameField(
+                          controller: _nameController,
+                          isLoading: _isLoading,
+                        ),
                         const SizedBox(height: 20),
-                        _buildAddressField(),
+                        _AddressField(
+                          controller: _addressController,
+                          isLoading: _isLoading,
+                        ),
                         const SizedBox(height: 20),
-                        _buildPortField(),
+                        _PortField(
+                          controller: _portController,
+                          isLoading: _isLoading,
+                          selectedType: _selectedType,
+                          onSubmit: _handleSubmit,
+                        ),
                         const SizedBox(height: 24),
-                        _buildHelpText(),
+                        _HelpText(selectedType: _selectedType),
                       ],
                     ),
                   ),
                 ),
               ),
-
-              // 底部按钮
-              _buildActions(isEdit),
+              _DialogActions(
+                isEdit: isEdit,
+                isLoading: _isLoading,
+                onCancel: () => Navigator.pop(context),
+                onSubmit: _handleSubmit,
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildHeader(bool isEdit, ThemeData theme) {
+class _DialogHeader extends StatelessWidget {
+  final bool isEdit;
+
+  const _DialogHeader({required this.isEdit});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green[400]!, Colors.green[600]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
-      ),
+      padding: _DialogConstants.headerPadding,
+      decoration: _DialogConstants.headerDecoration,
       child: Row(
         children: [
           Container(
@@ -168,7 +207,7 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
             child: const Icon(
               Icons.dns,
               color: Colors.white,
-              size: 28,
+              size: _DialogConstants.iconSize,
             ),
           ),
           const SizedBox(width: 16),
@@ -199,8 +238,21 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
       ),
     );
   }
+}
 
-  Widget _buildTypeSelector() {
+class _TypeSelector extends StatelessWidget {
+  final ServerType selectedType;
+  final bool isLoading;
+  final ValueChanged<ServerType?> onChanged;
+
+  const _TypeSelector({
+    required this.selectedType,
+    required this.isLoading,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey[100],
@@ -209,48 +261,83 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
       ),
       child: Row(
         children: ServerType.values.map((type) {
-          final isSelected = _selectedType == type;
+          final isSelected = selectedType == type;
           return Expanded(
-            child: InkWell(
-              onTap: _isLoading ? null : () => _onTypeChanged(type),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.green[600] : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      type == ServerType.java ? Icons.computer : Icons.phone_android,
-                      color: isSelected ? Colors.white : Colors.grey[600],
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      type.displayName,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.grey[700],
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: _TypeSelectorItem(
+              type: type,
+              isSelected: isSelected,
+              isLoading: isLoading,
+              onTap: () => onChanged(type),
             ),
           );
         }).toList(),
       ),
     );
   }
+}
 
-  Widget _buildNameField() {
+class _TypeSelectorItem extends StatelessWidget {
+  final ServerType type;
+  final bool isSelected;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _TypeSelectorItem({
+    required this.type,
+    required this.isSelected,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.green[600] : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              type == ServerType.java ? Icons.computer : Icons.phone_android,
+              color: isSelected ? Colors.white : Colors.grey[600],
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              type.displayName,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NameField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isLoading;
+
+  const _NameField({
+    required this.controller,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return TextFormField(
-      controller: _nameController,
-      enabled: !_isLoading,
+      controller: controller,
+      enabled: !isLoading,
       textCapitalization: TextCapitalization.words,
       maxLength: 20,
       decoration: InputDecoration(
@@ -292,11 +379,22 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
       },
     );
   }
+}
 
-  Widget _buildAddressField() {
+class _AddressField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isLoading;
+
+  const _AddressField({
+    required this.controller,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return TextFormField(
-      controller: _addressController,
-      enabled: !_isLoading,
+      controller: controller,
+      enabled: !isLoading,
       keyboardType: TextInputType.url,
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
@@ -334,7 +432,6 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
         if (trimmed.length < 3) {
           return '地址格式不正确';
         }
-        // 简单的域名/IP验证
         final validPattern = RegExp(
           r'^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$',
         );
@@ -345,24 +442,39 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
       },
     );
   }
+}
 
-  Widget _buildPortField() {
+class _PortField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isLoading;
+  final ServerType selectedType;
+  final VoidCallback onSubmit;
+
+  const _PortField({
+    required this.controller,
+    required this.isLoading,
+    required this.selectedType,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return TextFormField(
-      controller: _portController,
-      enabled: !_isLoading,
+      controller: controller,
+      enabled: !isLoading,
       keyboardType: TextInputType.number,
       textInputAction: TextInputAction.done,
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(5),
       ],
-      onFieldSubmitted: (_) => _handleSubmit(),
+      onFieldSubmitted: (_) => onSubmit(),
       decoration: InputDecoration(
         labelText: '端口号',
-        hintText: _selectedType.defaultPort.toString(),
+        hintText: selectedType.defaultPort.toString(),
         prefixIcon: Icon(Icons.settings_ethernet, color: Colors.purple[600]),
         suffixIcon: Tooltip(
-          message: '${_selectedType.displayName}默认端口是 ${_selectedType.defaultPort}',
+          message: '${selectedType.displayName}默认端口是 ${selectedType.defaultPort}',
           child: Icon(Icons.info_outline, color: Colors.grey[400], size: 20),
         ),
         filled: true,
@@ -403,8 +515,15 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
       },
     );
   }
+}
 
-  Widget _buildHelpText() {
+class _HelpText extends StatelessWidget {
+  final ServerType selectedType;
+
+  const _HelpText({required this.selectedType});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -418,7 +537,7 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              _selectedType == ServerType.java
+              selectedType == ServerType.java
                   ? '提示：Java 版默认端口 25565'
                   : '提示：基岩版默认端口 19132',
               style: TextStyle(
@@ -431,22 +550,31 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
       ),
     );
   }
+}
 
-  Widget _buildActions(bool isEdit) {
+class _DialogActions extends StatelessWidget {
+  final bool isEdit;
+  final bool isLoading;
+  final VoidCallback onCancel;
+  final VoidCallback onSubmit;
+
+  const _DialogActions({
+    required this.isEdit,
+    required this.isLoading,
+    required this.onCancel,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-      ),
+      decoration: _DialogConstants.footerDecoration,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           TextButton(
-            onPressed: _isLoading ? null : () => Navigator.pop(context),
+            onPressed: isLoading ? null : onCancel,
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -460,7 +588,7 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
           ),
           const SizedBox(width: 12),
           ElevatedButton(
-            onPressed: _isLoading ? null : _handleSubmit,
+            onPressed: isLoading ? null : onSubmit,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green[600],
               foregroundColor: Colors.white,
@@ -470,7 +598,7 @@ class _ServerDialogState extends State<ServerDialog> with SingleTickerProviderSt
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: _isLoading
+            child: isLoading
                 ? const SizedBox(
               width: 20,
               height: 20,

@@ -35,7 +35,7 @@ class MCStatusService {
     }
   }
 
-  /// 便捷方法：直接传入 Server 对象
+  /// 直接传入 Server 对象
   Future<ServerStatus> getServerStatusFromServer(Server server) async {
     return getServerStatus(server.address, server.type, port: server.port);
   }
@@ -87,7 +87,7 @@ class MCStatusService {
     }
   }
 
-  /// 添加新服务器到后端
+  // 添加新服务器到后端
   Future<bool> addServer(Server server) async {
     if (_historyUrl.isEmpty) return false;
     try {

@@ -106,7 +106,7 @@ class Motd {
     return processed;
   }
 
-  /// 调试方法：获取编码信息
+  // 调试方法：获取编码信息
   Map<String, dynamic> getDebugInfo() {
     return {
       'raw': TextProcessor.getEncodingInfo(raw),
