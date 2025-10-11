@@ -567,7 +567,7 @@ class _AppBarFlexibleSpace extends StatelessWidget {
                     'Minecraft 服务器',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 34,
+                      fontSize: 32,
                       color: Colors.white70,
                     ),
                   ),

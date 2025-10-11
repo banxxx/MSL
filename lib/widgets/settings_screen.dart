@@ -372,7 +372,7 @@ class _SettingsAppBar extends StatelessWidget {
                       '设置',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 34,
+                        fontSize: 32,
                         color: Colors.white70,
                       ),
                     ),
@@ -558,7 +558,7 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Made with ❤ for Minecraft Players',
+        'Made with for Minecraft Players',
         style: TextStyle(
           fontSize: 13,
           color: Colors.grey[500],
