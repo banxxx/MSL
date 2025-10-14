@@ -1,11 +1,8 @@
 # MSL - Minecraft Server Tracker
 
-<div align="center">
-
 [![Flutter](https://img.shields.io/badge/Flutter-3.29.3-02569B?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-brightgreen)]()
-[![License](https://img.shields.io/github/license/YOUR_USERNAME/YOUR_REPO)]()
-[![Release](https://img.shields.io/githu/banxxx/MSL/releases)]()
+[![Release](https://img.shields.io/github/v/release/banxxx/MSL)]()
 
 **一款基于 Flutter 开发的跨平台 Minecraft 服务器监控应用**
 
@@ -25,10 +22,7 @@
 ## 🛠️ 技术栈
 
 - **框架**: Flutter 3.29.3
-- **数据后端**: [Minetrack](https://github.com/Cryptkeeper/Minetrack)
-- **状态管理**: Provider / Riverpod（根据你的实际情况修改）
-- **网络请求**: Dio / http（根据你的实际情况修改）
-- **图表展示**: fl_chart（根据你的实际情况修改）
+- **数据后端**: [Minetrack](https://github.com/banxxx/Minetrack)
 
 ## 📋 系统要求
 
@@ -40,10 +34,6 @@
 - iOS 12.0 或更高版本
 - 需要自签名安装
 - 约 40MB 存储空间
-
-## 📄 许可证
-
-本项目采用 [MIT License](LICENSE) 开源协议。
 
 ## ⚠️ 免责声明
 
